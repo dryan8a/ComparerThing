@@ -5,9 +5,7 @@ using System.Reflection;
 
 namespace ComparerThing
 {
-
-
-    class Comparer
+    class ComparerGenerator
     {
         public static int GenericCompare<T>(T object1, T object2) //Inefficient generic compare
         {
@@ -52,15 +50,16 @@ namespace ComparerThing
         }
         public static Func<T, T, int> GetCompareFunc<T>()
         {
-            var paramArray = Expression.Parameter(typeof(T[]),"params");
-            var leftExpr = Expression.ArrayIndex(paramArray, Expression.Constant(0));
-            var rightExpr = Expression.ArrayIndex(paramArray, Expression.Constant(1));
+            var leftExpr = Expression.Parameter(typeof(T), "left");
+            var rightExpr = Expression.Parameter(typeof(T), "right");
             MethodCallExpression leftExprCall = default;
             MethodCallExpression rightExprCall = default;
             MethodInfo compareMethod = default;
             if (typeof(T).GetInterface("IComparable") != null)
             {
-                return (Func<T, T, int>)Delegate.CreateDelegate(typeof(Func<T, T, int>), typeof(T).GetMethod("CompareTo"));
+                Expression TCompareBody = Expression.Call(leftExpr, typeof(T).GetMethod("CompareTo", new Type[] { typeof(T) }), rightExpr);
+                var TCompareDelegate = Expression.Lambda<Func<T, T, int>>(TCompareBody, leftExpr, rightExpr);
+                return TCompareDelegate.Compile();
             }
             var comparableMembers = typeof(T).GetProperties().Where(a => a.PropertyType.GetInterfaces().Any(x => x.Name == "IComparable")).ToArray();
             if(comparableMembers.Count() == 0)
@@ -75,19 +74,17 @@ namespace ComparerThing
             {
                 leftExprCall = Expression.Call(leftExpr, comparableMembers.First().GetGetMethod());
                 rightExprCall = Expression.Call(rightExpr, comparableMembers.First().GetGetMethod());
-                compareMethod = comparableMembers.First().PropertyType.GetMethod("CompareTo"); //compareto might not be the play look into it
+                compareMethod = comparableMembers.First().PropertyType.GetMethod("CompareTo",new Type[] { comparableMembers.First().PropertyType }); //compareto might not be the play look into it
             }
-            //Expression.Call()
-            //return (Func<T, T, bool>)Delegate.CreateDelegate(typeof(Func<T, T, bool>), compareMethod);
             Expression body = Expression.Call(leftExprCall, compareMethod, rightExprCall);
-            var compareDelegate = Expression.Lambda<Func<T, T, int>>(body, paramArray);
+            var compareDelegate = Expression.Lambda<Func<T, T, int>>(body, leftExpr,rightExpr);
             return compareDelegate.Compile();
         }
 
-        private static (MethodInfo left, MethodInfo right, MethodInfo compareMethod) GetComparableProperty(Type type,Expression leftExpr, Expression rightExpr)
+        private static (Expression left, Expression right, MethodInfo compareMethod) GetComparableProperty(Type type,Expression leftExpr, Expression rightExpr)
         {
-            MethodInfo left;
-            MethodInfo right;
+            Expression leftCall;
+            Expression rightCall;
             if(type.GetInterface("IComparable") != null)
             {
                 
@@ -98,18 +95,16 @@ namespace ComparerThing
                 
             }
             return (null,null,null);
-        }
-
-        
+        }       
     }
     class BST<T>
     {
-        Func<T, T, int> comparer;
+        Func<T, T, int> Comparer;
         Node<T> Head;
         public BST()
         {
             Head = null;
-            comparer = Comparer.GetCompareFunc<T>();
+            Comparer = ComparerGenerator.GetCompareFunc<T>();
         }
 
         public void Add(T value)
@@ -123,7 +118,7 @@ namespace ComparerThing
             Node<T> currentNode = Head;
             while(true)
             {
-                if (Comparer.GenericCompare<T>(value, currentNode.Value) > 0)
+                if (Comparer(value, currentNode.Value) > 0)
                 {
                     if (currentNode.RightChild == null)
                     {
@@ -132,7 +127,7 @@ namespace ComparerThing
                     }
                     else currentNode = currentNode.RightChild;
                 }
-                else if (Comparer.GenericCompare<T>(value, currentNode.Value) < 0)
+                else if (Comparer(value, currentNode.Value) < 0)
                 {
                     if (currentNode.LeftChild == null)
                     {
@@ -161,50 +156,40 @@ namespace ComparerThing
     public class ComparableAttribute : Attribute
     {
     }
+    class Test
+    {
+        [Comparable]
+        public int num { get; set; }
+    }
+    class Person
+    {
+        public int Age { get; set; }
+    }
+    class Employee
+    {
+        public Person person { get; set; }
+    }
     class Program
     {
-        class Test
-        {
-            [Comparable]
-            public int num { get; set; }
-        }
-        class Person
-        {
-            public int Age { get; set; }
-            //public Test t { get; set; }
-            //public string Name { get; set; }
-        }
-
-        class Employee
-        {
-            public Person person { get; set; }
-        }
-
-        //class EmployeeOfTheMonth
-        //{
-        //    Employee emp;
-        //}
-
         static void Main(string[] args)
         {
-            //int x = 7;
-            //int y = 6;
-            //var res1 = Comparer.GenericCompare(x, y);
+            var bstEmployee = new BST<Employee>();
+            bstEmployee.Add(new Employee { person = new Person { Age = 6 } });
+            bstEmployee.Add(new Employee { person = new Person { Age = 4 } });
+            bstEmployee.Add(new Employee { person = new Person { Age = 7 } });
+            bstEmployee.Add(new Employee { person = new Person { Age = 8 } });
 
-            //Person a = new Person() { Age = 6 };
-            //Person b = new Person() { Age = 6 };
-            //var res2 = Comparer.GenericCompare(a,b);
+            var bstPerson = new BST<Person>();
+            bstPerson.Add(new Person { Age = 6 });
+            bstPerson.Add(new Person { Age = 4 });
+            bstPerson.Add(new Person { Age = 7 });
+            bstPerson.Add(new Person { Age = 8 });
 
-            //var emp1 = new Employee { person = new Person { Age = 9, Name = "Bob", t = new Test() { num = 11 } } };
-            //var emp2 = new Employee { person = new Person { Age = 7, Name = "William", t = new Test() { num = 9 } } };
-            //var res3 = Comparer.GenericAttributeCompare(emp1, emp2);
-
-            var bst = new BST<Person>();
-            bst.Add( new Person { Age = 6 } );
-            bst.Add(new Person { Age = 4 } );
-            bst.Add(new Person { Age = 7 } );
-            bst.Add(new Person { Age = 8 } );
-
+            var bstInt = new BST<int>();
+            bstInt.Add(6);
+            bstInt.Add(4);
+            bstInt.Add(7);
+            bstInt.Add(8);
         }
     }
 }
