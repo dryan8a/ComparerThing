@@ -52,45 +52,23 @@ namespace ComparerThing
         {
             var leftExpr = Expression.Parameter(typeof(T), "left");
             var rightExpr = Expression.Parameter(typeof(T), "right");
-            MethodCallExpression leftExprCall = default;
-            MethodCallExpression rightExprCall = default;
-            MethodInfo compareMethod = default;
-            if (typeof(T).GetInterface("IComparable") != null)
-            {
-                Expression TCompareBody = Expression.Call(leftExpr, typeof(T).GetMethod("CompareTo", new Type[] { typeof(T) }), rightExpr);
-                var TCompareDelegate = Expression.Lambda<Func<T, T, int>>(TCompareBody, leftExpr, rightExpr);
-                return TCompareDelegate.Compile();
-            }
-            var comparableMembers = typeof(T).GetProperties().Where(a => a.PropertyType.GetInterfaces().Any(x => x.Name == "IComparable")).ToArray();
-            if(comparableMembers.Count() == 0)
-            {
-                var output = GetComparableProperty(typeof(T),leftExpr,rightExpr);
-                if (output == (null, null, null)) throw new Exception("No comparable member exists");
-                leftExprCall = output.left;
-                rightExprCall = output.right;
-                compareMethod = output.compareMethod;
-            }
-            else
-            {
-                leftExprCall = Expression.Call(leftExpr, comparableMembers.First().GetGetMethod());
-                rightExprCall = Expression.Call(rightExpr, comparableMembers.First().GetGetMethod());
-                compareMethod = comparableMembers.First().PropertyType.GetMethod("CompareTo",new Type[] { comparableMembers.First().PropertyType }); //compareto might not be the play look into it
-            }
-            Expression body = Expression.Call(leftExprCall, compareMethod, rightExprCall);
+            var output = GetComparableProperty(typeof(T),leftExpr,rightExpr);
+            if (output == (null, null, null)) throw new Exception("No comparable member exists");
+            Expression body = Expression.Call(output.left, output.compareMethod, output.right);
             var compareDelegate = Expression.Lambda<Func<T, T, int>>(body, leftExpr,rightExpr);
             return compareDelegate.Compile();
         }
 
-        private static (MethodCallExpression left, MethodCallExpression right, MethodInfo compareMethod) GetComparableProperty(Type type, Expression leftExpr, Expression rightExpr)
+        private static (Expression left, Expression right, MethodInfo compareMethod) GetComparableProperty(Type type, Expression leftExpr, Expression rightExpr)
         {
+            if(type.GetInterface("IComparable") != null)
+            {
+                return (leftExpr, rightExpr, type.GetMethod("CompareTo", new Type[] { type }));
+            }
             foreach(var prop in type.GetProperties())
             {
-                MethodCallExpression leftExprCall = Expression.Call(leftExpr, prop.GetGetMethod());
-                MethodCallExpression rightExprCall = Expression.Call(rightExpr, prop.GetGetMethod());
-                if (prop.PropertyType.GetInterface("IComparable") != null)
-                {
-                    return (leftExprCall, rightExprCall, prop.PropertyType.GetMethod("CompareTo", new Type[] { prop.PropertyType }));
-                }
+                Expression leftExprCall = Expression.Call(leftExpr, prop.GetGetMethod());
+                Expression rightExprCall = Expression.Call(rightExpr, prop.GetGetMethod());
                 var output = GetComparableProperty(prop.PropertyType,leftExprCall,rightExprCall);
                 if (output == (null, null, null)) continue;
                 return output;
