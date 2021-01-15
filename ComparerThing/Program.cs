@@ -66,8 +66,8 @@ namespace ComparerThing
             {
                 var output = GetComparableProperty(typeof(T),leftExpr,rightExpr);
                 if (output == (null, null, null)) throw new Exception("No comparable member exists");
-               // leftExprCall = output.left;
-               // rightExprCall = output.right;
+                leftExprCall = output.left;
+                rightExprCall = output.right;
                 compareMethod = output.compareMethod;
             }
             else
@@ -81,18 +81,19 @@ namespace ComparerThing
             return compareDelegate.Compile();
         }
 
-        private static (Expression left, Expression right, MethodInfo compareMethod) GetComparableProperty(Type type,Expression leftExpr, Expression rightExpr)
+        private static (MethodCallExpression left, MethodCallExpression right, MethodInfo compareMethod) GetComparableProperty(Type type, Expression leftExpr, Expression rightExpr)
         {
-            Expression leftCall;
-            Expression rightCall;
-            if(type.GetInterface("IComparable") != null)
-            {
-                
-            }
             foreach(var prop in type.GetProperties())
             {
-                var output = GetComparableProperty(type,leftExpr,rightExpr);
-                
+                MethodCallExpression leftExprCall = Expression.Call(leftExpr, prop.GetGetMethod());
+                MethodCallExpression rightExprCall = Expression.Call(rightExpr, prop.GetGetMethod());
+                if (prop.PropertyType.GetInterface("IComparable") != null)
+                {
+                    return (leftExprCall, rightExprCall, prop.PropertyType.GetMethod("CompareTo", new Type[] { prop.PropertyType }));
+                }
+                var output = GetComparableProperty(prop.PropertyType,leftExprCall,rightExprCall);
+                if (output == (null, null, null)) continue;
+                return output;
             }
             return (null,null,null);
         }       
