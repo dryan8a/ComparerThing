@@ -76,10 +76,10 @@ namespace ComparerThing
             return (null,null,null);
         }       
     }
-    class BST<T>
+    public class BST<T>
     {
         Func<T, T, int> Comparer;
-        Node<T> Head;
+        public Node<T> Head;
         public BST()
         {
             Head = null;
@@ -119,7 +119,7 @@ namespace ComparerThing
             }
         }
     }
-    class Node<T>
+    public class Node<T>
     {
         public T Value;
         public Node<T> LeftChild;
@@ -140,11 +140,11 @@ namespace ComparerThing
         [Comparable]
         public int num { get; set; }
     }
-    class Person
+    public class Person
     {
         public int Age { get; set; }
     }
-    class Employee
+    public class Employee
     {
         public Person person { get; set; }
     }
